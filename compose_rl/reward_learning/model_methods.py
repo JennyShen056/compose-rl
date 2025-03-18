@@ -1,6 +1,5 @@
 # Copyright 2024 MosaicML ComposeRL authors
 # SPDX-License-Identifier: Apache-2.0
-##### model_methods.py
 
 """Reward Model Utilies."""
 
@@ -82,7 +81,7 @@ def pairwise_forward(
             chosen_len=batch["chosen_len"],
             rejected_len=batch["rejected_len"],
             max_seq_len=concat_seq_len // 2,
-            pad_token_id=pad_token_id,  # type: ignore
+            pad_token_id=pad_token_id,
         )
 
     else:
@@ -94,7 +93,7 @@ def pairwise_forward(
             chosen_len=batch["chosen_len"],
             rejected_len=batch["rejected_len"],
             max_seq_len=concat_seq_len // 2,
-            pad_token_id=pad_token_id,  # type: ignore
+            pad_token_id=pad_token_id,
         )
 
         chosen_attention_mask, rejected_attention_mask = extract_packed_chosen_rejected(
@@ -177,8 +176,6 @@ def classifier_forward(
     return_lm_logits: bool = False,
 ) -> dict[str, torch.Tensor]:
 
-    print(f"DEBUG FORWARD: Input labels shape: {batch['labels'].shape}")
-
     model_output = model(
         batch["text"],
         attention_mask=batch["text_attention_mask"],
@@ -186,8 +183,6 @@ def classifier_forward(
     )
 
     output_scores = model_output.scores
-    print(f"DEBUG FORWARD: Raw output scores shape: {output_scores.shape}")
-
     if return_last:
         # Expected Shape: (Batch Size, 1)
         output_scores = torch.gather(
@@ -195,8 +190,42 @@ def classifier_forward(
             dim=1,
             index=batch["text_len"].view(-1, 1) - 1,
         )
-        print(
-            f"DEBUG FORWARD: After gather, output scores shape: {output_scores.shape}"
+
+    # We need to add the labels here to compute metrics
+    outputs: dict[str, torch.Tensor] = {
+        "output_scores": output_scores,
+        "labels": batch["labels"],
+    }
+
+    return outputs
+
+
+def causal_classifier_forward(
+    model: nn.Module,
+    tokenizer: Tokenizer,
+    batch: MutableMapping,
+    policy_model_config: Optional[PretrainedConfig] = None,
+    use_attention_sequence_id: bool = False,
+    return_last: bool = True,
+) -> dict[str, torch.Tensor]:
+
+    model_output = model(
+        batch["text"],
+        attention_mask=batch["text_attention_mask"],
+        return_lm_logits=True,  # Difference 1/2 from causal_forward: always return logits
+    )
+
+    # Difference 2/2 from causal_forward: scores are logits of EOS token
+    if tokenizer is None:
+        raise ValueError("Tokenizer must be provided for causal classifier forward.")
+    # Expected Shape: (Batch Size, Max Seq. Length)
+    output_scores = model_output.logits[:, :, tokenizer.eos_token_id]
+    if return_last:
+        # Expected Shape: (Batch Size, 1)
+        output_scores = torch.gather(
+            output_scores,
+            dim=1,
+            index=batch["text_len"].view(-1, 1) - 1,
         )
 
     # We need to add the labels here to compute metrics
@@ -279,23 +308,12 @@ def classifier_loss(
         loss_type (str): Loss type that we should compute (e.g. bce),
     """
     output_scores = outputs["output_scores"]
-    labels = batch["labels"]
-
-    print(f"DEBUG LOSS: Output scores shape: {output_scores.shape}")
-    print(f"DEBUG LOSS: Labels shape: {labels.shape}")
-
-    # If labels is [batch_size] (flat), reshape to [batch_size, 1]
-    if len(labels.shape) == 1:
-        labels = labels.view(-1, 1)
-        print(f"DEBUG LOSS: Reshaped labels to: {labels.shape}")
 
     if loss_type == ClassifierRewardEnum.BCE:
-        try:
-            loss = F.binary_cross_entropy_with_logits(output_scores, labels)
-            print(f"DEBUG LOSS: Loss calculated successfully")
-        except Exception as e:
-            print(f"DEBUG LOSS: Failed to calculate loss: {e}")
-            raise
+        loss = F.binary_cross_entropy_with_logits(
+            output_scores,
+            batch["labels"],
+        )
     else:
         raise NotImplementedError(f"Loss type: {loss_type} is not supported.")
 

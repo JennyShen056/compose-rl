@@ -1,9 +1,6 @@
 # Copyright 2024 MosaicML ComposeRL authors
 # SPDX-License-Identifier: Apache-2.0
 
-##### preference_data.py
-
-
 """Build a reward dataset and dataloader for training."""
 
 import logging
@@ -63,9 +60,9 @@ def pairwise_preference_dataset_collate_fn(
 
         # Add the eos token if it's not in the chosen sample
         if chosen[-1] != tokenizer.eos_token_id:
-            chosen[-1] = tokenizer.eos_token_id  # type: ignore
+            chosen[-1] = tokenizer.eos_token_id
         if rejected[-1] != tokenizer.eos_token_id:
-            rejected[-1] = tokenizer.eos_token_id  # type: ignore
+            rejected[-1] = tokenizer.eos_token_id
 
         pad_len = max_seq_len * 2 - chosen_len - rejected_len
         cat_batch = torch.cat([chosen, rejected], dim=-1)
@@ -76,10 +73,10 @@ def pairwise_preference_dataset_collate_fn(
 
             # Truncate each value by truncate length, and make the last token EOS
             chosen = chosen[:-truncate_len]
-            chosen[-1] = tokenizer.eos_token_id  # type: ignore
+            chosen[-1] = tokenizer.eos_token_id
 
             rejected = rejected[:-truncate_len]
-            rejected[-1] = tokenizer.eos_token_id  # type: ignore
+            rejected[-1] = tokenizer.eos_token_id
 
             cat_batch = torch.cat([chosen, rejected], dim=-1)
 
@@ -99,7 +96,7 @@ def pairwise_preference_dataset_collate_fn(
             )
 
         attention_mask = torch.logical_not(
-            torch.eq(cat_batch, tokenizer.pad_token_id),  # type: ignore
+            torch.eq(cat_batch, tokenizer.pad_token_id),
         )
 
         cur_sequence_ids = torch.tensor(
@@ -189,6 +186,7 @@ def finegrained_preference_dataset_collate_fn(
     batch["text_attention_mask"] = torch.logical_not(
         torch.eq(batch["text"], tokenizer.pad_token_id),
     )
+
     return batch
 
 
@@ -304,11 +302,7 @@ class FinegrainedPreferenceStreamingDataset(StreamingDataset):
         """
         sample = super().__getitem__(idx)
         text = self._read_binary_tokenized_sample(sample, "input")
-
-        label = torch.from_numpy(np.frombuffer(sample["labels"], dtype=np.float32))
-
-        # label = torch.from_numpy(np.frombuffer(sample["labels"], dtype=np.uint8))
-
+        label = torch.from_numpy(np.frombuffer(sample["label"], dtype=np.uint8))
         # This needs to be a float tensor for BCE
         label = label.to(torch.float32)
 
