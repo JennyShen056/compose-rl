@@ -182,7 +182,7 @@ def main(
     tokenizer_name: str,
     dataset_type: Literal["preference", "single_prompt", "classifier"],
     max_length: int = 2048,
-    max_samples: int = None,  # Add this parameter
+    max_samples: int = 1000,  # Add this parameter
 ):
     columns = {
         "preference": {
@@ -194,7 +194,7 @@ def main(
         },
         "classifier": {
             "input": "bytes",
-            "label": "bytes",  # Note: fixed from "labels" to "label" to match the actual code
+            "labelz": "bytes",  # Note: fixed from "labels" to "label" to match the actual code
         },
     }[dataset_type]
 
