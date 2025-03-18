@@ -31,16 +31,16 @@ class UnifiedTokenizedDataset(IterableDataset):
         split: str,
         tokenizer: PreTrainedTokenizerBase,
         max_length: int,
-        dataset_type: Literal['preference', 'single_prompt'],
+        dataset_type: Literal["preference", "single_prompt"],
     ):
         self.tokenizer = tokenizer
-        os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
         self.max_length = max_length
         self.dataset_type = dataset_type
 
-        print(f'Dataset name: {dataset_name}')
-        print(f'Processing split: {split}')
-        print(f'Processing dataset type: {dataset_type}')
+        print(f"Dataset name: {dataset_name}")
+        print(f"Processing split: {split}")
+        print(f"Processing dataset type: {dataset_type}")
 
         self.hf_dataset = hf_datasets.load_dataset(
             path=dataset_name,
@@ -50,13 +50,13 @@ class UnifiedTokenizedDataset(IterableDataset):
 
     def __iter__(self) -> Iterator[dict[str, bytes]]:
         for sample in self.hf_dataset:
-            if self.dataset_type == 'preference':
+            if self.dataset_type == "preference":
                 yield self._process_preference_sample(sample)
-            elif self.dataset_type == 'single_prompt':
+            elif self.dataset_type == "single_prompt":
                 result = self._process_single_prompt_sample(sample)
                 if result is not None:
                     yield result
-            elif self.dataset_type == 'classifier':
+            elif self.dataset_type == "classifier":
                 yield self._process_classifier_sample(sample)
 
     def _process_preference_sample(self, sample: Any):
@@ -65,8 +65,8 @@ class UnifiedTokenizedDataset(IterableDataset):
         Args:
             sample (Any): a sample from the dataset
         """
-        chosen_messages = sample['chosen']
-        rejected_messages = sample['rejected']
+        chosen_messages = sample["chosen"]
+        rejected_messages = sample["rejected"]
 
         curr_chosen = self.tokenizer.apply_chat_template(
             chosen_messages,
@@ -78,8 +78,8 @@ class UnifiedTokenizedDataset(IterableDataset):
         )
 
         return {
-            'chosen': np.asarray(curr_chosen).tobytes(),
-            'rejected': np.asarray(curr_rejected).tobytes(),
+            "chosen": np.asarray(curr_chosen).tobytes(),
+            "rejected": np.asarray(curr_rejected).tobytes(),
         }
 
     def _process_single_prompt_sample(self, sample: Any):
@@ -88,13 +88,13 @@ class UnifiedTokenizedDataset(IterableDataset):
         Args:
             sample (Any): a sample from the dataset
         """
-        prompt = sample['prompt']
-        messages = [{
-            'role':
-                'user',
-            'content':
-                f'Can you summarize the following content in 50 words or less: {prompt}',
-        }]
+        prompt = sample["prompt"]
+        messages = [
+            {
+                "role": "user",
+                "content": f"Can you summarize the following content in 50 words or less: {prompt}",
+            }
+        ]
         encoded_prompt = self.tokenizer.apply_chat_template(
             messages,
             tokenize=True,
@@ -104,7 +104,7 @@ class UnifiedTokenizedDataset(IterableDataset):
         if len(encoded_prompt) > self.max_length:
             return None
 
-        return {'prompt': np.asarray(encoded_prompt).tobytes()}
+        return {"prompt": np.asarray(encoded_prompt).tobytes()}
 
     def _process_classifier_sample(self, sample: Any):
         """A dummy process a classifier sample.
@@ -112,20 +112,24 @@ class UnifiedTokenizedDataset(IterableDataset):
         Args:
             sample (Any): a sample from the dataset
         """
-        messages = [{
-            'role': 'user',
-            'content': f'This is a test',
-        }]
+        # messages = [{
+        #     'role': 'user',
+        #     'content': f'This is a test',
+        # }]
+        messages = [
+            {"role": "user", "content": sample["prompt"]},
+            {"role": "user", "content": sample["response"]},
+        ]
         encoded_prompt = self.tokenizer.apply_chat_template(
             messages,
             tokenize=True,
         )
 
-        label = np.random.randint(0, 2, size=(1,))
+        label = np.array([sample["helpfulness"]], dtype=np.int64)
 
         return {
-            'input': np.asarray(encoded_prompt).tobytes(),
-            'label': np.asarray(label).tobytes(),
+            "input": np.asarray(encoded_prompt).tobytes(),
+            "label": np.asarray(label).tobytes(),
         }
 
 
@@ -136,20 +140,20 @@ def main(
     hashes: list[str],
     splits: list[str],
     tokenizer_name: str,
-    dataset_type: Literal['preference', 'single_prompt'],
+    dataset_type: Literal["preference", "single_prompt"],
     max_length: int = 2048,
 ):
     columns = {
-        'preference': {
-            'chosen': 'bytes',
-            'rejected': 'bytes',
+        "preference": {
+            "chosen": "bytes",
+            "rejected": "bytes",
         },
-        'single_prompt': {
-            'prompt': 'bytes',
+        "single_prompt": {
+            "prompt": "bytes",
         },
-        'classifier': {
-            'input': 'bytes',
-            'label': 'bytes',
+        "classifier": {
+            "input": "bytes",
+            "label": "bytes",
         },
     }[dataset_type]
 
@@ -159,7 +163,7 @@ def main(
     )
     tokenizer.model_max_length = int(1e30)
 
-    print(f'Using tokenizer: {tokenizer}')
+    print(f"Using tokenizer: {tokenizer}")
 
     num_written = 0
     for split in splits:
@@ -177,51 +181,51 @@ def main(
                 dataset_type=dataset_type,
             )
 
-            print('Converting to MDS format')
+            print("Converting to MDS format")
 
             for sample in dataset:
                 num_written += 1
                 out.write(sample)
 
-        print(f'Finished writing {num_written} samples')
-    print('Finished converting')
-    print('Dataset has:', num_written, 'samples')
+        print(f"Finished writing {num_written} samples")
+    print("Finished converting")
+    print("Dataset has:", num_written, "samples")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--dataset_name',
+        "--dataset_name",
         type=str,
         required=True,
-        help='Name of the dataset to process',
+        help="Name of the dataset to process",
     )
-    parser.add_argument('--compression', type=str, default='zstd')
-    parser.add_argument('--local_dir', type=str, required=True)
+    parser.add_argument("--compression", type=str, default="zstd")
+    parser.add_argument("--local_dir", type=str, required=True)
     parser.add_argument(
-        '--hashes',
+        "--hashes",
         type=str,
-        nargs='+',
-        default=['sha1', 'xxh64'],
+        nargs="+",
+        default=["sha1", "xxh64"],
     )
-    parser.add_argument('--splits', type=str, nargs='+', default=['train'])
+    parser.add_argument("--splits", type=str, nargs="+", default=["train"])
     parser.add_argument(
-        '--tokenizer_name',
+        "--tokenizer_name",
         type=str,
-        default='rajammanabrolu/gpt-4-chat',
+        default="rajammanabrolu/gpt-4-chat",
     )
     parser.add_argument(
-        '--dataset_type',
+        "--dataset_type",
         type=str,
-        choices=['preference', 'single_prompt', 'classifier'],
+        choices=["preference", "single_prompt", "classifier"],
         required=True,
-        help='Type of dataset to process',
+        help="Type of dataset to process",
     )
     parser.add_argument(
-        '--max_length',
+        "--max_length",
         type=int,
         default=2048,
-        help='Maximum length of tokenized samples',
+        help="Maximum length of tokenized samples",
     )
 
     args = parser.parse_args()
