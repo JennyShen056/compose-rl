@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """Reward Model Utilies."""
-
+## model_methods.py
 from enum import Enum
 from typing import Mapping, MutableMapping, Optional, Union
 
@@ -307,6 +307,7 @@ def classifier_loss(
         batch (Mapping): Input batch of data.
         loss_type (str): Loss type that we should compute (e.g. bce),
     """
+
     output_scores = outputs["output_scores"]
 
     if loss_type == ClassifierRewardEnum.BCE:

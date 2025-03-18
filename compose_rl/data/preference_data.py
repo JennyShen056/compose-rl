@@ -1,6 +1,6 @@
 # Copyright 2024 MosaicML ComposeRL authors
 # SPDX-License-Identifier: Apache-2.0
-
+## preference_data.py
 """Build a reward dataset and dataloader for training."""
 
 import logging
@@ -150,6 +150,14 @@ def finegrained_preference_dataset_collate_fn(
         max_seq_len (int): The maximum sequence length of the model.
         data (dict): The preference data to collate.
     """
+    # Add debugging to check shapes
+    for item in data:
+        if "label" in item or "labels" in item:
+            key = "label" if "label" in item else "labels"
+            print(
+                f"DEBUG COLLATE: Label shape before processing: {item[key].shape}, value: {item[key]}"
+            )
+
     del max_seq_len
     if tokenizer.pad_token_id is None:
         raise ValueError("Tokenizer must have a PAD token.")
@@ -186,6 +194,13 @@ def finegrained_preference_dataset_collate_fn(
     batch["text_attention_mask"] = torch.logical_not(
         torch.eq(batch["text"], tokenizer.pad_token_id),
     )
+
+    # After processing labels, add another debug print
+    if "label" in batch or "labels" in batch:
+        key = "label" if "label" in batch else "labels"
+        print(
+            f"DEBUG COLLATE: Final batch label shape: {batch[key].shape}, sample: {batch[key][0]}"
+        )
 
     return batch
 

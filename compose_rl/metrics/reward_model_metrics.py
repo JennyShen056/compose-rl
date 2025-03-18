@@ -1,6 +1,8 @@
 # Copyright 2024 MosaicML ComposeRL authors
 # SPDX-License-Identifier: Apache-2.0
 
+## reward_model_metircs
+
 from typing import Any
 
 import torch
@@ -22,19 +24,20 @@ class PairwiseRewardClassificationAccuracy(Metric):
         # State from multiple processes
         super().__init__(dist_sync_on_step=dist_sync_on_step)
         self.add_state(
-            'correct',
-            default=torch.tensor(0.),
-            dist_reduce_fx='sum',
+            "correct",
+            default=torch.tensor(0.0),
+            dist_reduce_fx="sum",
         )
-        self.add_state('total', default=torch.tensor(0.), dist_reduce_fx='sum')
+        self.add_state("total", default=torch.tensor(0.0), dist_reduce_fx="sum")
 
     def update(self, batch: dict, output_logits: torch.Tensor):
         del output_logits
-        bs, _ = batch['chosen_scores'].shape
+        bs, _ = batch["chosen_scores"].shape
 
         self.total += bs
-        self.correct += (batch['chosen_scores'] >
-                         batch['rejected_scores']).sum().detach().cpu()
+        self.correct += (
+            (batch["chosen_scores"] > batch["rejected_scores"]).sum().detach().cpu()
+        )
 
     def compute(self):
         assert isinstance(self.correct, Tensor)
@@ -71,11 +74,11 @@ class BinaryRewardClassificationAccuracy(Metric):
         self.threshold = threshold
 
         self.add_state(
-            'correct',
-            default=torch.tensor(0.),
-            dist_reduce_fx='sum',
+            "correct",
+            default=torch.tensor(0.0),
+            dist_reduce_fx="sum",
         )
-        self.add_state('total', default=torch.tensor(0.), dist_reduce_fx='sum')
+        self.add_state("total", default=torch.tensor(0.0), dist_reduce_fx="sum")
 
     def update(self, batch: dict, output_logits: torch.Tensor):
         """Update state with predictions and targets.
@@ -85,9 +88,9 @@ class BinaryRewardClassificationAccuracy(Metric):
             output_logits: `None`
         """
         del output_logits
-        logits = batch['output_scores']
-        targets = batch['labels'].squeeze(-1)
-        assert logits.shape[0] == targets.shape[0], 'Batch sizes must match'
+        logits = batch["output_scores"]
+        targets = batch["labels"].squeeze(-1)
+        assert logits.shape[0] == targets.shape[0], "Batch sizes must match"
 
         # TODO (raj): Handle multi-class classification with logging
         probs = torch.sigmoid(logits.squeeze())

@@ -158,7 +158,7 @@ class UnifiedTokenizedDataset(IterableDataset):
             tokenize=True,
         )
 
-        label = np.array([sample["label"]], dtype=np.float32)  # ← Add brackets here
+        label = np.array([float(sample["label"])], dtype=np.float32)
 
         # label = np.array([np.random.randint(0, 2)], dtype=np.float32)
         print(f"DEBUG DATASET: Created label with shape: {label.shape}, value: {label}")
