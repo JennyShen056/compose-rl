@@ -138,7 +138,7 @@ class UnifiedTokenizedDataset(IterableDataset):
 
         return {
             "input": np.asarray(encoded_prompt).tobytes(),
-            "label": np.asarray(label).tobytes(),
+            "labels": np.asarray(label).tobytes(),
         }
 
     # def _process_classifier_sample(self, sample: Any):
