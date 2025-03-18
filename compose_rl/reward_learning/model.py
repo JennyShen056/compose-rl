@@ -110,9 +110,11 @@ class ComposerHFClassifierRewardModel(
         use_train_metrics: bool = True,
         additional_train_metrics: Optional[list] = None,
         additional_eval_metrics: Optional[list] = None,
-        loss_type: str = "bce",
+        # loss_type: str = "bce",
+        loss_type: str = "ce",  # Change default to "ce" for multi-class
         return_lm_logits: bool = False,
         return_last: bool = True,
+        num_labels: int = 5,  # Add num_labels parameter for 5 classes (0-4)
         **kwargs: Any,
     ):
         self.loss_type = ClassifierRewardEnum(loss_type)
@@ -121,6 +123,7 @@ class ComposerHFClassifierRewardModel(
 
         config_overrides = {
             "return_logits": return_lm_logits,
+            "num_labels": num_labels,  # Pass num_labels to model configuration
         }
 
         if "config_overrides" in kwargs:
