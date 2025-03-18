@@ -317,9 +317,22 @@ class FinegrainedPreferenceStreamingDataset(StreamingDataset):
         """
         sample = super().__getitem__(idx)
         text = self._read_binary_tokenized_sample(sample, "input")
+
+        # Print the raw labels before processing
+        print(f"DEBUG RAW LABEL: {sample['labels'][:20]} (first 20 bytes)")
+
         label = torch.from_numpy(np.frombuffer(sample["labels"], dtype=np.uint8))
         # This needs to be a float tensor for BCE
         label = label.to(torch.float32)
+        print(f"DEBUG AFTER FROMBUFFER: Label shape: {label.shape}, value: {label}")
+
+        # If this is a binary classification task, we might only need the first value
+        if label.shape[0] > 1:
+            print(
+                f"DEBUG MULTI-DIM LABEL: Original shape: {label.shape}, taking first dimension"
+            )
+            label = label[0:1]  # Keep only the first dimension
+            print(f"DEBUG RESHAPED LABEL: New shape: {label.shape}, value: {label}")
 
         text_len = len(text)
 
