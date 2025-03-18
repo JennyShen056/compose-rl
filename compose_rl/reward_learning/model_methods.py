@@ -177,9 +177,32 @@ def classifier_forward(
     return_last: bool = True,
     return_lm_logits: bool = False,
 ) -> dict[str, torch.Tensor]:
+    """Forward pass for classifier rewards model.
 
-    input_ids = batch["input_ids"]
-    attention_mask = batch["attention_mask"]
+    Handles both 'input_ids' and 'input' field names to be compatible with different data formats.
+
+    Args:
+        model: HF model
+        tokenizer: HF tokenizer
+        batch: batch with input_ids/input, attention_mask, and labels
+        return_last: whether to return the last hidden state
+        return_lm_logits: whether to return language model logits
+        policy_model_config: config for the policy model
+        use_attention_sequence_id: whether to use attention sequence id
+
+    Returns:
+        outputs: model outputs
+    """
+    # Check which field names are being used in the batch
+    if "input_ids" in batch:
+        input_ids = batch["input_ids"]
+        attention_mask = batch.get("attention_mask", None)
+    elif "input" in batch:
+        # Our data processing uses 'input' instead of 'input_ids'
+        input_ids = batch["input"]
+        attention_mask = batch.get("attention_mask", None)
+    else:
+        raise KeyError("Batch must contain either 'input_ids' or 'input' key")
 
     # The model will output logits of shape [batch_size, num_labels]
     # where num_labels is set in the model config (5 in our case)
@@ -257,14 +280,23 @@ def classifier_loss(
     """Computes Classifier loss.
 
     Given precomputed values this will compute the specified classifier loss.
+    Handles both 'labels' and 'label' field names for flexibility.
 
     Args:
         outputs (SequenceClassifierOutput): Outputs from forwarding the model over the batch.
         batch (Mapping): Input batch of data.
-        loss_type (str): Loss type that we should compute (e.g. bce),
+        loss_type (str): Loss type that we should compute (e.g. bce, ce),
     """
     logits = outputs.logits  # Shape: [batch_size, num_labels]
-    labels = batch["labels"]  # Shape: [batch_size, 1] containing values 0-4
+
+    # Check which field name is being used in the batch
+    if "labels" in batch:
+        labels = batch["labels"]
+    elif "label" in batch:
+        # Our data processing uses 'label' instead of 'labels'
+        labels = batch["label"]
+    else:
+        raise KeyError("Batch must contain either 'labels' or 'label' key")
 
     # For multi-class classification with CrossEntropyLoss,
     # we need labels as a 1D tensor of integers
