@@ -30,9 +30,9 @@ def pairwise_preference_dataset_collate_fn(
         data (list[dict[str, torch.Tensor]]): The preference data to collate.
     """
     if tokenizer.eos_token_id is None:
-        raise ValueError('Tokenizer must have an EOS token.')
+        raise ValueError("Tokenizer must have an EOS token.")
     if tokenizer.pad_token_id is None:
-        raise ValueError('Tokenizer must have a PAD token.')
+        raise ValueError("Tokenizer must have a PAD token.")
 
     ref_collate_fn = DataCollatorForLanguageModeling(
         tokenizer=tokenizer,
@@ -50,10 +50,10 @@ def pairwise_preference_dataset_collate_fn(
     rejected_rewards = []
 
     for sample in data:
-        chosen = sample['chosen']
-        rejected = sample['rejected']
-        chosen_len = sample['chosen_len']
-        rejected_len = sample['rejected_len']
+        chosen = sample["chosen"]
+        rejected = sample["rejected"]
+        chosen_len = sample["chosen_len"]
+        rejected_len = sample["rejected_len"]
 
         # Note: if we do any truncation, we force the last token to be EOS
         # https://github.com/mosaicml/RLHF/issues/101
@@ -89,8 +89,8 @@ def pairwise_preference_dataset_collate_fn(
             cat_batch = torch.cat(
                 [
                     cat_batch,
-                    torch.ones(int(pad_len.item()), dtype=cat_batch.dtype) *
-                    tokenizer.pad_token_id,
+                    torch.ones(int(pad_len.item()), dtype=cat_batch.dtype)
+                    * tokenizer.pad_token_id,
                 ],
                 dim=-1,
             )
@@ -99,21 +99,23 @@ def pairwise_preference_dataset_collate_fn(
             torch.eq(cat_batch, tokenizer.pad_token_id),  # type: ignore
         )
 
-        cur_sequence_ids = torch.tensor(([0] * chosen_len) +
-                                        ([1] * rejected_len) +
-                                        ([-1] * max(0, int(pad_len.item()))),)
+        cur_sequence_ids = torch.tensor(
+            ([0] * chosen_len)
+            + ([1] * rejected_len)
+            + ([-1] * max(0, int(pad_len.item()))),
+        )
         sequence_ids.append(cur_sequence_ids)
 
         input_ids.append(cat_batch)
         attention_masks.append(attention_mask)
         chosen_lens.append(chosen_len)
         rejected_lens.append(rejected_len)
-        prompt_lens.append(sample['prompt_len'])
-        if 'chosen_reward' in sample:
-            chosen_rewards.append(sample['chosen_reward'])
-            rejected_rewards.append(sample['rejected_reward'])
+        prompt_lens.append(sample["prompt_len"])
+        if "chosen_reward" in sample:
+            chosen_rewards.append(sample["chosen_reward"])
+            rejected_rewards.append(sample["rejected_reward"])
 
-    input_ids = ref_collate_fn(input_ids)['input_ids']
+    input_ids = ref_collate_fn(input_ids)["input_ids"]
     attention_masks = torch.stack(attention_masks)
     sequence_ids = torch.stack(sequence_ids)
 
@@ -121,18 +123,18 @@ def pairwise_preference_dataset_collate_fn(
     rejected_lens = torch.cat(rejected_lens)
     prompt_lens = torch.cat(prompt_lens)
     return_dict = {
-        'chosen_len': chosen_lens,
-        'rejected_len': rejected_lens,
-        'prompt_len': prompt_lens,
-        'input_ids': input_ids,
-        'text_attention_mask': attention_masks,
-        'sequence_ids': sequence_ids,
+        "chosen_len": chosen_lens,
+        "rejected_len": rejected_lens,
+        "prompt_len": prompt_lens,
+        "input_ids": input_ids,
+        "text_attention_mask": attention_masks,
+        "sequence_ids": sequence_ids,
     }
     if len(chosen_rewards) > 0:
         chosen_rewards = torch.stack(chosen_rewards)
         rejected_rewards = torch.stack(rejected_rewards)
-        return_dict['chosen_reward'] = chosen_rewards
-        return_dict['rejected_reward'] = rejected_rewards
+        return_dict["chosen_reward"] = chosen_rewards
+        return_dict["rejected_reward"] = rejected_rewards
     return return_dict
 
 
@@ -150,7 +152,7 @@ def finegrained_preference_dataset_collate_fn(
     """
     del max_seq_len
     if tokenizer.pad_token_id is None:
-        raise ValueError('Tokenizer must have a PAD token.')
+        raise ValueError("Tokenizer must have a PAD token.")
     ref_collate_fn = DataCollatorForLanguageModeling(
         tokenizer=tokenizer,
         mlm=False,
@@ -161,27 +163,28 @@ def finegrained_preference_dataset_collate_fn(
     batch = {}
     for key in keys:
         cur_values = [item[key] for item in data]
-        if key == 'prompt_mask':
+        if key == "prompt_mask":
             max_len = max([len(val) for val in cur_values])
-            mask = torch.stack([
-                torch.cat([torch.Tensor(val),
-                           torch.ones(max_len - len(val))])
-                for val in cur_values
-            ])
+            mask = torch.stack(
+                [
+                    torch.cat([torch.Tensor(val), torch.ones(max_len - len(val))])
+                    for val in cur_values
+                ]
+            )
             mask = ~mask.to(torch.bool)
             batch[key] = mask.to(torch.int8)
             continue
-        elif key in ['prompt_len', 'text_len']:
+        elif key in ["prompt_len", "text_len"]:
             batch[key] = torch.stack(cur_values).squeeze(dim=1)
             continue
-        elif key in ['label']:
+        elif key in ["label"]:
             cur_values = [a.unsqueeze(0) for a in cur_values]
             batch[key] = torch.cat(cur_values, dim=0)
             continue
 
-        batch[key] = ref_collate_fn(cur_values)['input_ids']
-    batch['text_attention_mask'] = torch.logical_not(
-        torch.eq(batch['text'], tokenizer.pad_token_id),  # type: ignore
+        batch[key] = ref_collate_fn(cur_values)["input_ids"]
+    batch["text_attention_mask"] = torch.logical_not(
+        torch.eq(batch["text"], tokenizer.pad_token_id),  # type: ignore
     )
 
     return batch
@@ -200,15 +203,14 @@ class PairwisePreferenceStreamingDataset(StreamingDataset):
         self.num_read += 1
         temp_sample = torch.from_numpy(np.frombuffer(sample[key]))
         if len(temp_sample) > self.max_seq_len:
-            log.info(f'Truncating sample: {self.num_truncated} {self.num_read}')
+            log.info(f"Truncating sample: {self.num_truncated} {self.num_read}")
             self.num_truncated += 1
             truncated = torch.from_numpy(
-                np.frombuffer(sample[key][self.max_seq_len:], dtype=np.int64),
+                np.frombuffer(sample[key][self.max_seq_len :], dtype=np.int64),
             )
-            log.info(f'Truncating: {truncated}')
+            log.info(f"Truncating: {truncated}")
         decoded_arr = torch.from_numpy(
-            np.frombuffer(sample[key],
-                          dtype=np.int64)[:self.max_seq_len].copy(),
+            np.frombuffer(sample[key], dtype=np.int64)[: self.max_seq_len].copy(),
         )
         return decoded_arr
 
@@ -221,28 +223,28 @@ class PairwisePreferenceStreamingDataset(StreamingDataset):
         """
         sample = super().__getitem__(idx)
         # Handle prompt if available
-        if 'prompt' in sample:
+        if "prompt" in sample:
             # Prepend the prompt to the chosen and rejected responses
-            sample['chosen'] = sample['prompt'] + sample['chosen']
-            sample['rejected'] = sample['prompt'] + sample['rejected']
-        chosen = self._read_binary_tokenized_sample(sample, 'chosen')
-        rejected = self._read_binary_tokenized_sample(sample, 'rejected')
+            sample["chosen"] = sample["prompt"] + sample["chosen"]
+            sample["rejected"] = sample["prompt"] + sample["rejected"]
+        chosen = self._read_binary_tokenized_sample(sample, "chosen")
+        rejected = self._read_binary_tokenized_sample(sample, "rejected")
 
         prompt_len = self.find_prompt_length(chosen, rejected)
         chosen_len, rejected_len = len(chosen), len(rejected)
         return_dict = {
-            'chosen': chosen,
-            'rejected': rejected,
-            'chosen_len': torch.Tensor([chosen_len]).to(torch.int64),
-            'rejected_len': torch.Tensor([rejected_len]).to(torch.int64),
-            'prompt_len': torch.Tensor([prompt_len]).to(torch.int64),
+            "chosen": chosen,
+            "rejected": rejected,
+            "chosen_len": torch.Tensor([chosen_len]).to(torch.int64),
+            "rejected_len": torch.Tensor([rejected_len]).to(torch.int64),
+            "prompt_len": torch.Tensor([prompt_len]).to(torch.int64),
         }
         # If rewards are given, add them to the return dict
-        if 'chosen_reward' in sample:
-            chosen_reward = torch.Tensor([sample['chosen_reward']])
-            rejected_reward = torch.Tensor([sample['rejected_reward']])
-            return_dict['chosen_reward'] = chosen_reward
-            return_dict['rejected_reward'] = rejected_reward
+        if "chosen_reward" in sample:
+            chosen_reward = torch.Tensor([sample["chosen_reward"]])
+            rejected_reward = torch.Tensor([sample["rejected_reward"]])
+            return_dict["chosen_reward"] = chosen_reward
+            return_dict["rejected_reward"] = rejected_reward
         return return_dict
 
     def find_prompt_length(self, seq_1: torch.Tensor, seq_2: torch.Tensor):
@@ -275,16 +277,15 @@ class FinegrainedPreferenceStreamingDataset(StreamingDataset):
         temp_sample = torch.from_numpy(np.frombuffer(sample[key]))
         if len(temp_sample) > self.max_seq_len:
             log.info(
-                f'Truncating sample {self.num_read}. Number truncated: {self.num_truncated}.',
+                f"Truncating sample {self.num_read}. Number truncated: {self.num_truncated}.",
             )
             self.num_truncated += 1
             truncated = torch.from_numpy(
-                np.frombuffer(sample[key][self.max_seq_len:], dtype=np.int64),
+                np.frombuffer(sample[key][self.max_seq_len :], dtype=np.int64),
             )
-            log.info(f'Truncated sample: {truncated}')
+            log.info(f"Truncated sample: {truncated}")
             decoded_arr = torch.from_numpy(
-                np.frombuffer(sample[key],
-                              dtype=np.int64)[:self.max_seq_len].copy(),
+                np.frombuffer(sample[key], dtype=np.int64)[: self.max_seq_len].copy(),
             )
         else:
             decoded_arr = torch.from_numpy(
@@ -300,15 +301,15 @@ class FinegrainedPreferenceStreamingDataset(StreamingDataset):
             idx (int): the index where we fetch the data in the StreamingDataset.
         """
         sample = super().__getitem__(idx)
-        text = self._read_binary_tokenized_sample(sample, 'input')
-        label = torch.from_numpy(np.frombuffer(sample['label'], dtype=np.uint8))
+        text = self._read_binary_tokenized_sample(sample, "input")
+        label = torch.from_numpy(np.frombuffer(sample["labels"], dtype=np.uint8))
         # This needs to be a float tensor for BCE
         label = label.to(torch.float32)
 
         text_len = len(text)
 
         return {
-            'text': text,
-            'labels': label,
-            'text_len': torch.Tensor([text_len]).to(torch.int64),
+            "text": text,
+            "labels": label,
+            "text_len": torch.Tensor([text_len]).to(torch.int64),
         }
