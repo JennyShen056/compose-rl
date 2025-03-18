@@ -188,7 +188,7 @@ def main(
         },
         "classifier": {
             "input": "bytes",
-            "label": "bytes",
+            "labels": "bytes",
         },
     }[dataset_type]
 
