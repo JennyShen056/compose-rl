@@ -67,7 +67,7 @@ algorithms:
     clipping_threshold: 1
 
 autoresume: false
-eval_first: flase
+eval_first: false
 
 fsdp_config:
   sharding_strategy: FULL_SHARD
