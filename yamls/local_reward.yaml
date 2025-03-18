@@ -26,10 +26,8 @@ model:
   # For regression based rewards
   additional_train_metrics:
     - classifier_accuracy
-    - classifier_f1
   additional_eval_metrics:
     - classifier_accuracy
-    - classifier_f1
 
 callbacks:
   lr_monitor: {}
