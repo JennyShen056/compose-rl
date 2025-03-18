@@ -145,8 +145,11 @@ class UnifiedTokenizedDataset(IterableDataset):
             sample (Any): a sample from the dataset
         """
         messages = [
-            {"role": "user", "content": sample["prompt"]},
-            {"role": "assistant", "content": sample["response"]},
+            {
+                "role": "user",
+                "content": f"categorize the movie reviews into positive (1) or negative (0): {sample['text']}",
+            },
+            # {"role": "assistant", "content": sample["response"]},
         ]
 
         # Tokenize the messages using the chat template
@@ -159,8 +162,9 @@ class UnifiedTokenizedDataset(IterableDataset):
             messages,
             tokenize=True,
         )
+        label = np.array(sample["label"], dtype=np.float32)
 
-        label = np.array([np.random.randint(0, 2)], dtype=np.float32)
+        # label = np.array([np.random.randint(0, 2)], dtype=np.float32)
         print(f"DEBUG DATASET: Created label with shape: {label.shape}, value: {label}")
 
         return {
