@@ -113,6 +113,7 @@ class UnifiedTokenizedDataset(IterableDataset):
         Args:
             sample (Any): a sample from the dataset
         """
+
         messages = [
             {"role": "user", "content": sample["prompt"]},
             {"role": "assistant", "content": sample["response"]},
@@ -171,6 +172,7 @@ class UnifiedTokenizedDataset(IterableDataset):
     #     }
 
 
+# Modify the main function to accept a max_samples parameter
 def main(
     dataset_name: str,
     compression: str,
@@ -178,8 +180,9 @@ def main(
     hashes: list[str],
     splits: list[str],
     tokenizer_name: str,
-    dataset_type: Literal["preference", "single_prompt"],
+    dataset_type: Literal["preference", "single_prompt", "classifier"],
     max_length: int = 2048,
+    max_samples: int = None,  # Add this parameter
 ):
     columns = {
         "preference": {
@@ -191,7 +194,7 @@ def main(
         },
         "classifier": {
             "input": "bytes",
-            "labels": "bytes",
+            "label": "bytes",  # Note: fixed from "labels" to "label" to match the actual code
         },
     }[dataset_type]
 
@@ -222,14 +225,20 @@ def main(
             print("Converting to MDS format")
 
             for sample in dataset:
-                num_written += 1
                 out.write(sample)
+                num_written += 1
+
+                # Add this check to limit the number of samples
+                if max_samples is not None and num_written >= max_samples:
+                    print(f"Reached maximum number of samples: {max_samples}")
+                    break
 
         print(f"Finished writing {num_written} samples")
     print("Finished converting")
     print("Dataset has:", num_written, "samples")
 
 
+# Modify the argument parser to include the max_samples parameter
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -265,6 +274,13 @@ if __name__ == "__main__":
         default=2048,
         help="Maximum length of tokenized samples",
     )
+    # Add this argument
+    parser.add_argument(
+        "--max_samples",
+        type=int,
+        default=1000,
+        help="Maximum number of samples to process",
+    )
 
     args = parser.parse_args()
 
@@ -277,4 +293,112 @@ if __name__ == "__main__":
         tokenizer_name=args.tokenizer_name,
         dataset_type=args.dataset_type,
         max_length=args.max_length,
+        max_samples=args.max_samples,  # Pass the parameter to main
     )
+# def main(
+#     dataset_name: str,
+#     compression: str,
+#     local_dir: str,
+#     hashes: list[str],
+#     splits: list[str],
+#     tokenizer_name: str,
+#     dataset_type: Literal["preference", "single_prompt"],
+#     max_length: int = 2048,
+# ):
+#     columns = {
+#         "preference": {
+#             "chosen": "bytes",
+#             "rejected": "bytes",
+#         },
+#         "single_prompt": {
+#             "prompt": "bytes",
+#         },
+#         "classifier": {
+#             "input": "bytes",
+#             "labels": "bytes",
+#         },
+#     }[dataset_type]
+
+#     tokenizer = AutoTokenizer.from_pretrained(
+#         tokenizer_name,
+#         trust_remote_code=True,
+#     )
+#     tokenizer.model_max_length = int(1e30)
+
+#     print(f"Using tokenizer: {tokenizer}")
+
+#     num_written = 0
+#     for split in splits:
+#         with MDSWriter(
+#             columns=columns,
+#             out=os.path.join(local_dir, split),
+#             compression=compression,
+#             hashes=hashes,
+#         ) as out:
+#             dataset = UnifiedTokenizedDataset(
+#                 dataset_name=dataset_name,
+#                 split=split,
+#                 max_length=max_length,
+#                 tokenizer=tokenizer,
+#                 dataset_type=dataset_type,
+#             )
+
+#             print("Converting to MDS format")
+
+#             for sample in dataset:
+#                 num_written += 1
+#                 out.write(sample)
+
+#         print(f"Finished writing {num_written} samples")
+#     print("Finished converting")
+#     print("Dataset has:", num_written, "samples")
+
+
+# if __name__ == "__main__":
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument(
+#         "--dataset_name",
+#         type=str,
+#         required=True,
+#         help="Name of the dataset to process",
+#     )
+#     parser.add_argument("--compression", type=str, default="zstd")
+#     parser.add_argument("--local_dir", type=str, required=True)
+#     parser.add_argument(
+#         "--hashes",
+#         type=str,
+#         nargs="+",
+#         default=["sha1", "xxh64"],
+#     )
+#     parser.add_argument("--splits", type=str, nargs="+", default=["train"])
+#     parser.add_argument(
+#         "--tokenizer_name",
+#         type=str,
+#         default="rajammanabrolu/gpt-4-chat",
+#     )
+#     parser.add_argument(
+#         "--dataset_type",
+#         type=str,
+#         choices=["preference", "single_prompt", "classifier"],
+#         required=True,
+#         help="Type of dataset to process",
+#     )
+#     parser.add_argument(
+#         "--max_length",
+#         type=int,
+#         default=2048,
+#         help="Maximum length of tokenized samples",
+#     )
+
+#     args = parser.parse_args()
+
+#     main(
+#         dataset_name=args.dataset_name,
+#         compression=args.compression,
+#         local_dir=args.local_dir,
+#         hashes=args.hashes,
+#         splits=args.splits,
+#         tokenizer_name=args.tokenizer_name,
+#         dataset_type=args.dataset_type,
+#         max_length=args.max_length,
+#     )
