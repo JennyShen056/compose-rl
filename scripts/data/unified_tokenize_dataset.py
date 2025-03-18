@@ -160,7 +160,7 @@ class UnifiedTokenizedDataset(IterableDataset):
             tokenize=True,
         )
 
-        label = np.random.randint(0, 2, size=(1,)).astype(np.float32)
+        label = np.random.randint(0, 2, size=(1, 1)).astype(np.float32)
 
         return {
             "input": np.asarray(encoded_prompt).tobytes(),
