@@ -1,5 +1,6 @@
 # Copyright 2024 MosaicML ComposeRL authors
 # SPDX-License-Identifier: Apache-2.0
+##### model.py
 
 """Reward Model Composer Implementation."""
 
@@ -19,8 +20,7 @@ from compose_rl.reward_learning.model_methods import (
     pairwise_forward,
     pairwise_loss,
 )
-from compose_rl.reward_learning.modeling_hf import \
-    ComposerHFSequenceClassification
+from compose_rl.reward_learning.modeling_hf import ComposerHFSequenceClassification
 from compose_rl.reward_learning.modeling_mpt import MPTForSequenceClassification
 
 log = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ class ComposerHFPairwiseRewardModel(
         use_train_metrics: bool = True,
         additional_train_metrics: Optional[list] = None,
         additional_eval_metrics: Optional[list] = None,
-        loss_type: str = 'bt',
+        loss_type: str = "bt",
         return_lm_logits: bool = False,
         return_last: bool = True,
         **kwargs: Any,
@@ -47,14 +47,14 @@ class ComposerHFPairwiseRewardModel(
         self.return_last = return_last
 
         config_overrides = {
-            'return_logits': return_lm_logits,
+            "return_logits": return_lm_logits,
         }
 
-        if 'config_overrides' in kwargs:
-            config_overrides.update(kwargs.pop('config_overrides'))
+        if "config_overrides" in kwargs:
+            config_overrides.update(kwargs.pop("config_overrides"))
 
-        self.min_threshold = kwargs.pop('min_threshold', None)
-        self.max_threshold = kwargs.pop('max_threshold', None)
+        self.min_threshold = kwargs.pop("min_threshold", None)
+        self.max_threshold = kwargs.pop("max_threshold", None)
 
         super().__init__(
             tokenizer=tokenizer,
@@ -66,11 +66,11 @@ class ComposerHFPairwiseRewardModel(
         )
 
     def forward(self, batch: MutableMapping) -> dict[str, torch.Tensor]:
-        is_inference = batch.get('is_inference', False)
+        is_inference = batch.get("is_inference", False)
         if is_inference:
             return self.model(
-                input_ids=batch['input_ids'],
-                attention_mask=batch['attention_mask'],
+                input_ids=batch["input_ids"],
+                attention_mask=batch["attention_mask"],
                 return_lm_logits=self.return_lm_logits,
             ).scores
         else:
@@ -89,8 +89,9 @@ class ComposerHFPairwiseRewardModel(
     ) -> dict[str, torch.Tensor]:
         return outputs if outputs is not None else self.forward(batch)
 
-    def loss(self, outputs: SequenceClassifierOutput,
-             batch: Mapping) -> dict[str, torch.Tensor]:
+    def loss(
+        self, outputs: SequenceClassifierOutput, batch: Mapping
+    ) -> dict[str, torch.Tensor]:
         return pairwise_loss(
             outputs,
             batch,
@@ -109,7 +110,7 @@ class ComposerHFClassifierRewardModel(
         use_train_metrics: bool = True,
         additional_train_metrics: Optional[list] = None,
         additional_eval_metrics: Optional[list] = None,
-        loss_type: str = 'bce',
+        loss_type: str = "bce",
         return_lm_logits: bool = False,
         return_last: bool = True,
         **kwargs: Any,
@@ -119,14 +120,14 @@ class ComposerHFClassifierRewardModel(
         self.return_last = return_last
 
         config_overrides = {
-            'return_logits': return_lm_logits,
+            "return_logits": return_lm_logits,
         }
 
-        if 'config_overrides' in kwargs:
-            config_overrides.update(kwargs.pop('config_overrides'))
+        if "config_overrides" in kwargs:
+            config_overrides.update(kwargs.pop("config_overrides"))
 
-        self.min_threshold = kwargs.pop('min_threshold', None)
-        self.max_threshold = kwargs.pop('max_threshold', None)
+        self.min_threshold = kwargs.pop("min_threshold", None)
+        self.max_threshold = kwargs.pop("max_threshold", None)
 
         super().__init__(
             tokenizer=tokenizer,
@@ -155,8 +156,9 @@ class ComposerHFClassifierRewardModel(
     ) -> dict[str, torch.Tensor]:
         return outputs if outputs is not None else self.forward(batch)
 
-    def loss(self, outputs: SequenceClassifierOutput,
-             batch: Mapping) -> dict[str, torch.Tensor]:
+    def loss(
+        self, outputs: SequenceClassifierOutput, batch: Mapping
+    ) -> dict[str, torch.Tensor]:
         return classifier_loss(
             outputs,
             batch,
@@ -172,7 +174,7 @@ class ComposerMPTPairwiseRewardModel(ComposerMPTCausalLM, RewardModel):
         tokenizer: Tokenizer,
         use_train_metrics: bool = True,
         additional_train_metrics: Optional[list] = None,
-        loss_type: str = 'bt',
+        loss_type: str = "bt",
         return_lm_logits: bool = False,
         return_last: bool = True,
         **kwargs: Any,
@@ -181,9 +183,9 @@ class ComposerMPTPairwiseRewardModel(ComposerMPTCausalLM, RewardModel):
         self.return_lm_logits = return_lm_logits
         self.return_last = return_last
 
-        kwargs[
-            'loss_fn'
-        ] = 'torch_crossentropy'  # NOTE: passing in dummy value to overwrite
+        kwargs["loss_fn"] = (
+            "torch_crossentropy"  # NOTE: passing in dummy value to overwrite
+        )
         super().__init__(
             tokenizer=tokenizer,
             use_train_metrics=use_train_metrics,
@@ -196,11 +198,11 @@ class ComposerMPTPairwiseRewardModel(ComposerMPTCausalLM, RewardModel):
         return MPTForSequenceClassification
 
     def forward(self, batch: MutableMapping) -> dict[str, torch.Tensor]:
-        is_inference = batch.get('is_inference', False)
+        is_inference = batch.get("is_inference", False)
         if is_inference:
             return self.model(
-                input_ids=batch['input_ids'],
-                attention_mask=batch['attention_mask'],
+                input_ids=batch["input_ids"],
+                attention_mask=batch["attention_mask"],
                 return_lm_logits=self.return_lm_logits,
             ).scores
         else:
@@ -209,8 +211,7 @@ class ComposerMPTPairwiseRewardModel(ComposerMPTCausalLM, RewardModel):
                 tokenizer=self.tokenizer,
                 batch=batch,
                 policy_model_config=self.config,
-                use_attention_sequence_id=self.model.transformer.
-                attn_uses_sequence_id,
+                use_attention_sequence_id=self.model.transformer.attn_uses_sequence_id,
                 return_last=self.return_last,
                 return_lm_logits=self.return_lm_logits,
             )
@@ -222,8 +223,9 @@ class ComposerMPTPairwiseRewardModel(ComposerMPTCausalLM, RewardModel):
     ) -> dict[str, torch.Tensor]:
         return outputs if outputs is not None else self.forward(batch)
 
-    def loss(self, outputs: SequenceClassifierOutput,
-             batch: Mapping) -> dict[str, torch.Tensor]:
+    def loss(
+        self, outputs: SequenceClassifierOutput, batch: Mapping
+    ) -> dict[str, torch.Tensor]:
         return pairwise_loss(
             outputs,
             batch,

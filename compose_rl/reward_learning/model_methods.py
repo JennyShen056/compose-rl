@@ -1,5 +1,6 @@
 # Copyright 2024 MosaicML ComposeRL authors
 # SPDX-License-Identifier: Apache-2.0
+##### model_methods.py
 
 """Reward Model Utilies."""
 
@@ -36,8 +37,6 @@ class PairwiseRewardEnum(Enum):
 
 class ClassifierRewardEnum(Enum):
     BCE = "bce"
-    CE = "ce"  # Cross entropy for multi-class
-    MSE = "mse"  # Mean squared error
 
 
 def pairwise_forward(
@@ -177,41 +176,27 @@ def classifier_forward(
     return_last: bool = True,
     return_lm_logits: bool = False,
 ) -> dict[str, torch.Tensor]:
-    """Forward pass for classifier rewards model.
 
-    Handles both 'input_ids' and 'input' field names to be compatible with different data formats.
-
-    Args:
-        model: HF model
-        tokenizer: HF tokenizer
-        batch: batch with input_ids/input, attention_mask, and labels
-        return_last: whether to return the last hidden state
-        return_lm_logits: whether to return language model logits
-        policy_model_config: config for the policy model
-        use_attention_sequence_id: whether to use attention sequence id
-
-    Returns:
-        outputs: model outputs
-    """
-    # Check which field names are being used in the batch
-    if "input_ids" in batch:
-        input_ids = batch["input_ids"]
-        attention_mask = batch.get("attention_mask", None)
-    elif "input" in batch:
-        # Our data processing uses 'input' instead of 'input_ids'
-        input_ids = batch["input"]
-        attention_mask = batch.get("attention_mask", None)
-    else:
-        raise KeyError("Batch must contain either 'input_ids' or 'input' key")
-
-    # The model will output logits of shape [batch_size, num_labels]
-    # where num_labels is set in the model config (5 in our case)
-    outputs = model(
-        input_ids=input_ids,
-        attention_mask=attention_mask,
-        return_dict=True,
+    model_output = model(
+        batch["text"],
+        attention_mask=batch["text_attention_mask"],
         return_lm_logits=return_lm_logits,
     )
+
+    output_scores = model_output.scores
+    if return_last:
+        # Expected Shape: (Batch Size, 1)
+        output_scores = torch.gather(
+            output_scores,
+            dim=1,
+            index=batch["text_len"].view(-1, 1) - 1,
+        )
+
+    # We need to add the labels here to compute metrics
+    outputs: dict[str, torch.Tensor] = {
+        "output_scores": output_scores,
+        "labels": batch["labels"],
+    }
 
     return outputs
 
@@ -280,45 +265,24 @@ def classifier_loss(
     """Computes Classifier loss.
 
     Given precomputed values this will compute the specified classifier loss.
-    Handles both 'labels' and 'label' field names for flexibility.
 
     Args:
         outputs (SequenceClassifierOutput): Outputs from forwarding the model over the batch.
         batch (Mapping): Input batch of data.
-        loss_type (str): Loss type that we should compute (e.g. bce, ce),
+        loss_type (str): Loss type that we should compute (e.g. bce),
     """
-    logits = outputs.logits  # Shape: [batch_size, num_labels]
+    output_scores = outputs["output_scores"]
 
-    # Check which field name is being used in the batch
-    if "labels" in batch:
-        labels = batch["labels"]
-    elif "label" in batch:
-        # Our data processing uses 'label' instead of 'labels'
-        labels = batch["label"]
+    if loss_type == ClassifierRewardEnum.BCE:
+        loss = F.binary_cross_entropy_with_logits(
+            output_scores,
+            batch["labels"],
+        )
     else:
-        raise KeyError("Batch must contain either 'labels' or 'label' key")
+        raise NotImplementedError(f"Loss type: {loss_type} is not supported.")
 
-    # For multi-class classification with CrossEntropyLoss,
-    # we need labels as a 1D tensor of integers
-    if labels.dim() > 1 and labels.size(1) == 1:
-        labels = labels.squeeze(1)
-
-    # Choose loss function based on loss_type
-    if loss_type == ClassifierRewardEnum.CE:
-        # Cross entropy loss for multi-class
-        loss_fn = torch.nn.CrossEntropyLoss()
-    else:
-        # Handle other loss types (BCE, etc.)
-        # This would need implementation based on the enum definition
-        loss_fn = torch.nn.CrossEntropyLoss()  # Default to CE for now
-
-    loss = loss_fn(logits, labels)
-
-    # Calculate accuracy
-    preds = torch.argmax(logits, dim=1)
-    acc = (preds == labels).float().mean()
-
-    return {
-        "loss": loss,
-        "classifier_accuracy": acc,
+    loss_dict = {
+        "total": loss,
     }
+
+    return loss_dict

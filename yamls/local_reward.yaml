@@ -1,3 +1,4 @@
+##### local_reward.yaml
 run_name: local-llama-8b-reward
 seed: 17
 # loggers:
@@ -13,7 +14,7 @@ model:
   # name: hf_pairwise_rm
   pretrained_model_name_or_path: meta-llama/Meta-Llama-3.1-8B-Instruct
   pretrained: true
-  loss_type: ce
+  loss_type: bce
   use_flash_attention_2: true
   return_last: true
   return_lm_logits: false

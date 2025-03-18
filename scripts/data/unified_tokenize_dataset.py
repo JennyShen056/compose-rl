@@ -1,5 +1,6 @@
 # Copyright 2024 MosaicML ComposeRL authors
 # SPDX-License-Identifier: Apache-2.0
+##### unified_tokenize_dataset.py
 
 """A unified script to create prompt datasets for different data types."""
 
@@ -106,6 +107,37 @@ class UnifiedTokenizedDataset(IterableDataset):
 
         return {"prompt": np.asarray(encoded_prompt).tobytes()}
 
+    # def _process_classifier_sample(self, sample: Any):
+    #     """A dummy process a classifier sample.
+
+    #     Args:
+    #         sample (Any): a sample from the dataset
+    #     """
+    #     messages = [
+    #         {"role": "user", "content": sample["prompt"]},
+    #         {"role": "assistant", "content": sample["response"]},
+    #     ]
+
+    #     # Tokenize the messages using the chat template
+    #     encoded_prompt = self.tokenizer.apply_chat_template(
+    #         messages,
+    #         tokenize=True,
+    #     )
+
+    #     # Use helpfulness as the multi-class label (as int64)
+    #     # Ensure helpfulness is an integer in range 0-4
+    #     helpfulness = int(sample["helpfulness"])
+    #     if helpfulness < 0:
+    #         helpfulness = 0
+    #     elif helpfulness > 4:
+    #         helpfulness = 4
+    #     label = np.array([helpfulness], dtype=np.int64)
+
+    #     return {
+    #         "input": np.asarray(encoded_prompt).tobytes(),
+    #         "label": np.asarray(label).tobytes(),
+    #     }
+
     def _process_classifier_sample(self, sample: Any):
         """A dummy process a classifier sample.
 
@@ -123,18 +155,16 @@ class UnifiedTokenizedDataset(IterableDataset):
             tokenize=True,
         )
 
-        # Use helpfulness as the multi-class label (as int64)
-        # Ensure helpfulness is an integer in range 0-4
-        helpfulness = int(sample["helpfulness"])
-        if helpfulness < 0:
-            helpfulness = 0
-        elif helpfulness > 4:
-            helpfulness = 4
-        label = np.array([helpfulness], dtype=np.int64)
+        encoded_prompt = self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=True,
+        )
+
+        label = np.random.randint(0, 2, size=(1,)).astype(np.float32)
 
         return {
             "input": np.asarray(encoded_prompt).tobytes(),
-            "label": np.asarray(label).tobytes(),
+            "labels": np.asarray(label).tobytes(),
         }
 
 
