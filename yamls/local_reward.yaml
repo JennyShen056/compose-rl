@@ -1,7 +1,7 @@
 ##### local_reward.yaml
 run_name: local-llama-8b-reward
 seed: 17
-# loggers:
+loggers: wandb
 # TODO: define loggers, e.g. mlflow, wandb, etc.
 # mlflow:
 #   tracking_uri: databricks
