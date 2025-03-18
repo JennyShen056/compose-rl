@@ -158,10 +158,6 @@ class UnifiedTokenizedDataset(IterableDataset):
             tokenize=True,
         )
 
-        encoded_prompt = self.tokenizer.apply_chat_template(
-            messages,
-            tokenize=True,
-        )
         label = np.array([sample["label"]], dtype=np.float32)  # ← Add brackets here
 
         # label = np.array([np.random.randint(0, 2)], dtype=np.float32)

@@ -284,11 +284,8 @@ def classifier_loss(
     print(f"DEBUG LOSS: Output scores shape: {output_scores.shape}")
     print(f"DEBUG LOSS: Labels shape: {labels.shape}")
 
-    if len(labels.shape) == 2 and labels.shape[1] == 4:
-        labels = labels[:, 0:1]
-        print(f"DEBUG LOSS: Reshaped labels to: {labels.shape}")
     # If labels is [batch_size] (flat), reshape to [batch_size, 1]
-    elif len(labels.shape) == 1:
+    if len(labels.shape) == 1:
         labels = labels.view(-1, 1)
         print(f"DEBUG LOSS: Reshaped labels to: {labels.shape}")
 
