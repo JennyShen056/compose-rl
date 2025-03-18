@@ -177,6 +177,8 @@ def classifier_forward(
     return_lm_logits: bool = False,
 ) -> dict[str, torch.Tensor]:
 
+    print(f"DEBUG FORWARD: Input labels shape: {batch['labels'].shape}")
+
     model_output = model(
         batch["text"],
         attention_mask=batch["text_attention_mask"],
@@ -184,12 +186,17 @@ def classifier_forward(
     )
 
     output_scores = model_output.scores
+    print(f"DEBUG FORWARD: Raw output scores shape: {output_scores.shape}")
+
     if return_last:
         # Expected Shape: (Batch Size, 1)
         output_scores = torch.gather(
             output_scores,
             dim=1,
             index=batch["text_len"].view(-1, 1) - 1,
+        )
+        print(
+            f"DEBUG FORWARD: After gather, output scores shape: {output_scores.shape}"
         )
 
     # We need to add the labels here to compute metrics
@@ -272,12 +279,26 @@ def classifier_loss(
         loss_type (str): Loss type that we should compute (e.g. bce),
     """
     output_scores = outputs["output_scores"]
+    labels = batch["labels"]
+
+    print(f"DEBUG LOSS: Output scores shape: {output_scores.shape}")
+    print(f"DEBUG LOSS: Labels shape: {labels.shape}")
+
+    if len(labels.shape) == 2 and labels.shape[1] == 4:
+        labels = labels[:, 0:1]
+        print(f"DEBUG LOSS: Reshaped labels to: {labels.shape}")
+    # If labels is [batch_size] (flat), reshape to [batch_size, 1]
+    elif len(labels.shape) == 1:
+        labels = labels.view(-1, 1)
+        print(f"DEBUG LOSS: Reshaped labels to: {labels.shape}")
 
     if loss_type == ClassifierRewardEnum.BCE:
-        loss = F.binary_cross_entropy_with_logits(
-            output_scores,
-            batch["labels"],
-        )
+        try:
+            loss = F.binary_cross_entropy_with_logits(output_scores, labels)
+            print(f"DEBUG LOSS: Loss calculated successfully")
+        except Exception as e:
+            print(f"DEBUG LOSS: Failed to calculate loss: {e}")
+            raise
     else:
         raise NotImplementedError(f"Loss type: {loss_type} is not supported.")
 

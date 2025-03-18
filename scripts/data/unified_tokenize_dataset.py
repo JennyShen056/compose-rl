@@ -160,7 +160,8 @@ class UnifiedTokenizedDataset(IterableDataset):
             tokenize=True,
         )
 
-        label = np.random.randint(0, 2, size=(1, 1)).astype(np.float32)
+        label = np.array([np.random.randint(0, 2)], dtype=np.float32)
+        print(f"DEBUG DATASET: Created label with shape: {label.shape}, value: {label}")
 
         return {
             "input": np.asarray(encoded_prompt).tobytes(),

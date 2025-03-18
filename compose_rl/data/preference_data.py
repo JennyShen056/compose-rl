@@ -177,12 +177,20 @@ def finegrained_preference_dataset_collate_fn(
         elif key in ["prompt_len", "text_len"]:
             batch[key] = torch.stack(cur_values).squeeze(dim=1)
             continue
-        elif key in ["label"]:
+        elif key in ["label", "labels"]:
+            print(f"DEBUG COLLATE: Before processing - {len(cur_values)} labels")
+
             cur_values = [a.unsqueeze(0) for a in cur_values]
             batch[key] = torch.cat(cur_values, dim=0)
+            print(f"DEBUG COLLATE: Final batch[{key}] shape: {batch[key].shape}")
+
             continue
 
         batch[key] = ref_collate_fn(cur_values)["input_ids"]
+    # Debug final batch
+    if "labels" in batch:
+        print(f"DEBUG COLLATE: Final labels shape: {batch['labels'].shape}")
+
     batch["text_attention_mask"] = torch.logical_not(
         torch.eq(batch["text"], tokenizer.pad_token_id),  # type: ignore
     )
@@ -302,7 +310,16 @@ class FinegrainedPreferenceStreamingDataset(StreamingDataset):
         """
         sample = super().__getitem__(idx)
         text = self._read_binary_tokenized_sample(sample, "input")
-        label = torch.from_numpy(np.frombuffer(sample["labels"], dtype=np.uint8))
+
+        # Debug the label loading process
+        print(f"DEBUG: Loading label from sample...")
+        raw_label = np.frombuffer(sample["labels"], dtype=np.float32)
+        print(f"DEBUG: Raw label shape: {raw_label.shape}, values: {raw_label}")
+
+        # label = torch.from_numpy(np.frombuffer(sample["labels"], dtype=np.uint8))
+        label = torch.from_numpy(raw_label)
+        print(f"DEBUG: Converted label shape: {label.shape}, dtype: {label.dtype}")
+
         # This needs to be a float tensor for BCE
         label = label.to(torch.float32)
 
