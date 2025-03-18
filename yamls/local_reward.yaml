@@ -14,13 +14,12 @@ model:
   # name: hf_pairwise_rm
   pretrained_model_name_or_path: meta-llama/Meta-Llama-3.1-8B-Instruct
   pretrained: true
-  loss_type: ce
+  loss_type: bce
   use_flash_attention_2: true
   return_last: true
   return_lm_logits: false
   use_auth_token: true
   init_device: mixed
-  num_labels: 5 # CHANGE: Adding num_labels=5 for classes 0-4
   # additional_train_metrics:
   #   - pairwise_rm_accuracy
   # additional_eval_metrics:

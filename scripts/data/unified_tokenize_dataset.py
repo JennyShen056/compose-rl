@@ -145,11 +145,8 @@ class UnifiedTokenizedDataset(IterableDataset):
             sample (Any): a sample from the dataset
         """
         messages = [
-            {
-                "role": "user",
-                "content": f"Can you classify the following movie review into positive (1) or negative (0): {sample['text']}",
-            }
-            # {"role": "assistant", "content": sample["response"]},
+            {"role": "user", "content": sample["prompt"]},
+            {"role": "assistant", "content": sample["response"]},
         ]
 
         # Tokenize the messages using the chat template
@@ -158,23 +155,17 @@ class UnifiedTokenizedDataset(IterableDataset):
             tokenize=True,
         )
 
-        if "label" in sample:
-            # If real label exists in the dataset, use it
-            label_value = int(sample["label"])
-        else:
-            # Use a dummy random label (0 or 1) if no real label exists
-            label_value = np.random.randint(0, 2)
-
-        # Store as a single value scalar, not an array with shape (1,)
-        label = np.array(label_value, dtype=np.int64)
-
-        print(
-            f"DEBUG DATASET: Created label with value: {label_value}, dtype: {label.dtype}"
+        encoded_prompt = self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=True,
         )
+
+        label = np.array([np.random.randint(0, 2)], dtype=np.float32)
+        print(f"DEBUG DATASET: Created label with shape: {label.shape}, value: {label}")
 
         return {
             "input": np.asarray(encoded_prompt).tobytes(),
-            "labels": label.tobytes(),  # Store the single value as bytes
+            "labels": np.asarray(label).tobytes(),
         }
 
 
