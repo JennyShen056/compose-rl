@@ -112,20 +112,25 @@ class UnifiedTokenizedDataset(IterableDataset):
         Args:
             sample (Any): a sample from the dataset
         """
-        # messages = [{
-        #     'role': 'user',
-        #     'content': f'This is a test',
-        # }]
         messages = [
             {"role": "user", "content": sample["prompt"]},
-            {"role": "user", "content": sample["response"]},
+            {"role": "assistant", "content": sample["response"]},
         ]
+
+        # Tokenize the messages using the chat template
         encoded_prompt = self.tokenizer.apply_chat_template(
             messages,
             tokenize=True,
         )
 
-        label = np.array([sample["helpfulness"]], dtype=np.int64)
+        # Use helpfulness as the multi-class label (as int64)
+        # Ensure helpfulness is an integer in range 0-4
+        helpfulness = int(sample["helpfulness"])
+        if helpfulness < 0:
+            helpfulness = 0
+        elif helpfulness > 4:
+            helpfulness = 4
+        label = np.array([helpfulness], dtype=np.int64)
 
         return {
             "input": np.asarray(encoded_prompt).tobytes(),

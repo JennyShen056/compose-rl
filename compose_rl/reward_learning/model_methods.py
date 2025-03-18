@@ -28,14 +28,16 @@ LM_LOGIT_LOSSES = []
 
 
 class PairwiseRewardEnum(Enum):
-    BT = 'bt'
-    BT_EURUS = 'bt_eurus'
-    BELLMAN = 'bellman'
-    BELLMAN_EURUS = 'bellman_eurus'
+    BT = "bt"
+    BT_EURUS = "bt_eurus"
+    BELLMAN = "bellman"
+    BELLMAN_EURUS = "bellman_eurus"
 
 
 class ClassifierRewardEnum(Enum):
-    BCE = 'bce'
+    BCE = "bce"
+    CE = "ce"  # Cross entropy for multi-class
+    MSE = "mse"  # Mean squared error
 
 
 def pairwise_forward(
@@ -59,27 +61,27 @@ def pairwise_forward(
         return_last (bool): Whether to only return the final score, or a value for every token
         return_lm_logits (bool): Whether to only return the logits from the lm_head
     """
-    if policy_model_config is not None and hasattr(model, 'transformer'):
+    if policy_model_config is not None and hasattr(model, "transformer"):
         clear_mb_load_balancing_loss(policy_model_config, model.transformer)
 
-    batch_size, concat_seq_len = batch['input_ids'].shape
+    batch_size, concat_seq_len = batch["input_ids"].shape
     pad_token_id = tokenizer.pad_token_id  # type: ignore
     if pad_token_id is None:
-        raise ValueError('Tokenizer must have a PAD token.')
+        raise ValueError("Tokenizer must have a PAD token.")
 
     # If we can use attention sequence ID, we use this logic branch.
     if use_attention_sequence_id:
         model_output = model(
-            batch['input_ids'],
-            attention_mask=batch['text_attention_mask'],
-            sequence_id=batch['sequence_ids'],
+            batch["input_ids"],
+            attention_mask=batch["text_attention_mask"],
+            sequence_id=batch["sequence_ids"],
             return_lm_logits=return_lm_logits,
         )
 
         chosen_scores, rejected_scores = extract_packed_chosen_rejected(
             input_tensor=model_output.scores,
-            chosen_len=batch['chosen_len'],
-            rejected_len=batch['rejected_len'],
+            chosen_len=batch["chosen_len"],
+            rejected_len=batch["rejected_len"],
             max_seq_len=concat_seq_len // 2,
             pad_token_id=pad_token_id,  # type: ignore
         )
@@ -89,17 +91,17 @@ def pairwise_forward(
         # Pack along the batch dimension instead.
 
         chosen_inputs, rejected_inputs = extract_packed_chosen_rejected(
-            input_tensor=batch['input_ids'],
-            chosen_len=batch['chosen_len'],
-            rejected_len=batch['rejected_len'],
+            input_tensor=batch["input_ids"],
+            chosen_len=batch["chosen_len"],
+            rejected_len=batch["rejected_len"],
             max_seq_len=concat_seq_len // 2,
             pad_token_id=pad_token_id,  # type: ignore
         )
 
         chosen_attention_mask, rejected_attention_mask = extract_packed_chosen_rejected(
-            input_tensor=batch['text_attention_mask'],
-            chosen_len=batch['chosen_len'],
-            rejected_len=batch['rejected_len'],
+            input_tensor=batch["text_attention_mask"],
+            chosen_len=batch["chosen_len"],
+            rejected_len=batch["rejected_len"],
             max_seq_len=concat_seq_len // 2,
             pad_token_id=0,
         )
@@ -114,7 +116,7 @@ def pairwise_forward(
         )
 
         # Dynamic Padding
-        max_length = max(max(batch['chosen_len']), max(batch['rejected_len']))
+        max_length = max(max(batch["chosen_len"]), max(batch["rejected_len"]))
         batch_cat_inputs = batch_cat_inputs[:, :max_length]
         batch_attn_mask = batch_attn_mask[:, :max_length]
 
@@ -136,17 +138,17 @@ def pairwise_forward(
         chosen_scores = torch.gather(
             chosen_scores,
             dim=1,
-            index=batch['chosen_len'].view(-1, 1) - 1,
+            index=batch["chosen_len"].view(-1, 1) - 1,
         )
         rejected_scores = torch.gather(
             rejected_scores,
             dim=1,
-            index=batch['rejected_len'].view(-1, 1) - 1,
+            index=batch["rejected_len"].view(-1, 1) - 1,
         )
 
     outputs: dict[str, torch.Tensor] = {
-        'chosen_scores': chosen_scores,
-        'rejected_scores': rejected_scores,
+        "chosen_scores": chosen_scores,
+        "rejected_scores": rejected_scores,
     }
 
     chosen_logits, rejected_logits = None, None
@@ -155,13 +157,13 @@ def pairwise_forward(
         chosen_logits = model_output.logits[:batch_size]
         rejected_logits = model_output.logits[batch_size:]
 
-        outputs['chosen_logits'] = chosen_logits
-        outputs['rejected_logits'] = rejected_logits
+        outputs["chosen_logits"] = chosen_logits
+        outputs["rejected_logits"] = rejected_logits
 
-    if policy_model_config is not None and hasattr(model, 'transformer'):
+    if policy_model_config is not None and hasattr(model, "transformer"):
         lbl = get_mb_load_balancing_loss(policy_model_config, model.transformer)
         if lbl is not None:
-            outputs['lbl'] = lbl
+            outputs["lbl"] = lbl
 
     return outputs
 
@@ -176,26 +178,17 @@ def classifier_forward(
     return_lm_logits: bool = False,
 ) -> dict[str, torch.Tensor]:
 
-    model_output = model(
-        batch['text'],
-        attention_mask=batch['text_attention_mask'],
+    input_ids = batch["input_ids"]
+    attention_mask = batch["attention_mask"]
+
+    # The model will output logits of shape [batch_size, num_labels]
+    # where num_labels is set in the model config (5 in our case)
+    outputs = model(
+        input_ids=input_ids,
+        attention_mask=attention_mask,
+        return_dict=True,
         return_lm_logits=return_lm_logits,
     )
-
-    output_scores = model_output.scores
-    if return_last:
-        # Expected Shape: (Batch Size, 1)
-        output_scores = torch.gather(
-            output_scores,
-            dim=1,
-            index=batch['text_len'].view(-1, 1) - 1,
-        )
-
-    # We need to add the labels here to compute metrics
-    outputs: dict[str, torch.Tensor] = {
-        'output_scores': output_scores,
-        'labels': batch['labels'],
-    }
 
     return outputs
 
@@ -215,8 +208,8 @@ def pairwise_loss(
         loss_type (str): Loss type that we should compute (e.g. dpo, ipo, or kto),
     """
     del batch
-    chosen_scores = outputs['chosen_scores']
-    rejected_scores = outputs['rejected_scores']
+    chosen_scores = outputs["chosen_scores"]
+    rejected_scores = outputs["rejected_scores"]
 
     partial_loss_dict = {}
     losses = torch.zeros_like(chosen_scores)
@@ -230,31 +223,28 @@ def pairwise_loss(
         losses = bt_loss + score_loss
 
         partial_loss_dict = {
-            'bt_loss': bt_loss,
-            'score_loss': score_loss,
+            "bt_loss": bt_loss,
+            "score_loss": score_loss,
         }
     else:
-        raise ValueError(f'Loss type: {loss_type} is not supported.')
+        raise ValueError(f"Loss type: {loss_type} is not supported.")
 
     losses = losses.mean()
 
     loss_dict = {
-        'chosen_rewards':
-            chosen_scores.detach(),
-        'rejected_rewards':
-            rejected_scores.detach(),
-        'margin': (chosen_scores - rejected_scores).detach(),
-        'accuracy':
-            (chosen_scores > rejected_scores).detach().to(torch.float32),
+        "chosen_rewards": chosen_scores.detach(),
+        "rejected_rewards": rejected_scores.detach(),
+        "margin": (chosen_scores - rejected_scores).detach(),
+        "accuracy": (chosen_scores > rejected_scores).detach().to(torch.float32),
     }
 
     loss_dict.update(partial_loss_dict)
 
-    if 'lbl' in outputs:
-        losses += outputs['lbl']
-        loss_dict['lbl'] = outputs['lbl']
+    if "lbl" in outputs:
+        losses += outputs["lbl"]
+        loss_dict["lbl"] = outputs["lbl"]
 
-    loss_dict['total'] = losses
+    loss_dict["total"] = losses
 
     return loss_dict
 
@@ -273,18 +263,30 @@ def classifier_loss(
         batch (Mapping): Input batch of data.
         loss_type (str): Loss type that we should compute (e.g. bce),
     """
-    output_scores = outputs['output_scores']
+    logits = outputs.logits  # Shape: [batch_size, num_labels]
+    labels = batch["labels"]  # Shape: [batch_size, 1] containing values 0-4
 
-    if loss_type == ClassifierRewardEnum.BCE:
-        loss = F.binary_cross_entropy_with_logits(
-            output_scores,
-            batch['labels'],
-        )
+    # For multi-class classification with CrossEntropyLoss,
+    # we need labels as a 1D tensor of integers
+    if labels.dim() > 1 and labels.size(1) == 1:
+        labels = labels.squeeze(1)
+
+    # Choose loss function based on loss_type
+    if loss_type == ClassifierRewardEnum.CE:
+        # Cross entropy loss for multi-class
+        loss_fn = torch.nn.CrossEntropyLoss()
     else:
-        raise NotImplementedError(f'Loss type: {loss_type} is not supported.')
+        # Handle other loss types (BCE, etc.)
+        # This would need implementation based on the enum definition
+        loss_fn = torch.nn.CrossEntropyLoss()  # Default to CE for now
 
-    loss_dict = {
-        'total': loss,
+    loss = loss_fn(logits, labels)
+
+    # Calculate accuracy
+    preds = torch.argmax(logits, dim=1)
+    acc = (preds == labels).float().mean()
+
+    return {
+        "loss": loss,
+        "classifier_accuracy": acc,
     }
-
-    return loss_dict
