@@ -147,7 +147,7 @@ class UnifiedTokenizedDataset(IterableDataset):
         messages = [
             {
                 "role": "user",
-                "content": f"Can you classify the following movie review into positive (1) or negative (0): {sample['prompt']}",
+                "content": f"Can you classify the following movie review into positive (1) or negative (0): {sample['text']}",
             }
             # {"role": "assistant", "content": sample["response"]},
         ]
