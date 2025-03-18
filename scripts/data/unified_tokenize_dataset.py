@@ -107,40 +107,6 @@ class UnifiedTokenizedDataset(IterableDataset):
 
         return {"prompt": np.asarray(encoded_prompt).tobytes()}
 
-    def _process_classifier_sample(self, sample: Any):
-        """A dummy process a classifier sample.
-
-        Args:
-            sample (Any): a sample from the dataset
-        """
-
-        messages = [
-            {"role": "user", "content": sample["prompt"]},
-            {"role": "assistant", "content": sample["response"]},
-        ]
-
-        # Tokenize the messages using the chat template
-        encoded_prompt = self.tokenizer.apply_chat_template(
-            messages,
-            tokenize=True,
-        )
-
-        # Use helpfulness as the multi-class label (as int64)
-        # Ensure helpfulness is an integer in range 0-4
-        helpfulness = int(sample["helpfulness"])
-        if helpfulness < 0:
-            helpfulness = 0
-        elif helpfulness > 4:
-            helpfulness = 4
-
-        # For multi-class classification, we just need a single integer value (not one-hot)
-        label = np.array([helpfulness], dtype=np.int64)
-
-        return {
-            "input": np.asarray(encoded_prompt).tobytes(),
-            "labels": np.asarray(label).tobytes(),
-        }
-
     # def _process_classifier_sample(self, sample: Any):
     #     """A dummy process a classifier sample.
 
@@ -158,144 +124,60 @@ class UnifiedTokenizedDataset(IterableDataset):
     #         tokenize=True,
     #     )
 
-    #     encoded_prompt = self.tokenizer.apply_chat_template(
-    #         messages,
-    #         tokenize=True,
-    #     )
-
-    #     label = np.array([np.random.randint(0, 2)], dtype=np.float32)
-    #     print(f"DEBUG DATASET: Created label with shape: {label.shape}, value: {label}")
+    #     # Use helpfulness as the multi-class label (as int64)
+    #     # Ensure helpfulness is an integer in range 0-4
+    #     helpfulness = int(sample["helpfulness"])
+    #     if helpfulness < 0:
+    #         helpfulness = 0
+    #     elif helpfulness > 4:
+    #         helpfulness = 4
+    #     label = np.array([helpfulness], dtype=np.int64)
 
     #     return {
     #         "input": np.asarray(encoded_prompt).tobytes(),
-    #         "labels": np.asarray(label).tobytes(),
+    #         "label": np.asarray(label).tobytes(),
     #     }
 
+    def _process_classifier_sample(self, sample: Any):
+        """A dummy process a classifier sample.
 
-# Modify the main function to accept a max_samples parameter
-# def main(
-#     dataset_name: str,
-#     compression: str,
-#     local_dir: str,
-#     hashes: list[str],
-#     splits: list[str],
-#     tokenizer_name: str,
-#     dataset_type: Literal["preference", "single_prompt", "classifier"],
-#     max_length: int = 2048,
-#     max_samples: int = 1000,  # Add this parameter
-# ):
-#     columns = {
-#         "preference": {
-#             "chosen": "bytes",
-#             "rejected": "bytes",
-#         },
-#         "single_prompt": {
-#             "prompt": "bytes",
-#         },
-#         "classifier": {
-#             "input": "bytes",
-#             "labels": "bytes",  # Note: fixed from "labels" to "label" to match the actual code
-#         },
-#     }[dataset_type]
+        Args:
+            sample (Any): a sample from the dataset
+        """
+        messages = [
+            {
+                "role": "user",
+                "content": f"Can you classify the following movie review into positive (1) or negative (0): {sample['prompt']}",
+            }
+            # {"role": "assistant", "content": sample["response"]},
+        ]
 
-#     tokenizer = AutoTokenizer.from_pretrained(
-#         tokenizer_name,
-#         trust_remote_code=True,
-#     )
-#     tokenizer.model_max_length = int(1e30)
+        # Tokenize the messages using the chat template
+        encoded_prompt = self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=True,
+        )
 
-#     print(f"Using tokenizer: {tokenizer}")
+        if "label" in sample:
+            # If real label exists in the dataset, use it
+            label_value = int(sample["label"])
+        else:
+            # Use a dummy random label (0 or 1) if no real label exists
+            label_value = np.random.randint(0, 2)
 
-#     num_written = 0
-#     for split in splits:
-#         with MDSWriter(
-#             columns=columns,
-#             out=os.path.join(local_dir, split),
-#             compression=compression,
-#             hashes=hashes,
-#         ) as out:
-#             dataset = UnifiedTokenizedDataset(
-#                 dataset_name=dataset_name,
-#                 split=split,
-#                 max_length=max_length,
-#                 tokenizer=tokenizer,
-#                 dataset_type=dataset_type,
-#             )
+        # Store as a single value scalar, not an array with shape (1,)
+        label = np.array(label_value, dtype=np.int64)
 
-#             print("Converting to MDS format")
+        print(
+            f"DEBUG DATASET: Created label with value: {label_value}, dtype: {label.dtype}"
+        )
 
-#             for sample in dataset:
-#                 out.write(sample)
-#                 num_written += 1
-
-#                 # Add this check to limit the number of samples
-#                 if max_samples is not None and num_written >= max_samples:
-#                     print(f"Reached maximum number of samples: {max_samples}")
-#                     break
-
-#         print(f"Finished writing {num_written} samples")
-#     print("Finished converting")
-#     print("Dataset has:", num_written, "samples")
+        return {
+            "input": np.asarray(encoded_prompt).tobytes(),
+            "labels": label.tobytes(),  # Store the single value as bytes
+        }
 
 
-# # Modify the argument parser to include the max_samples parameter
-# if __name__ == "__main__":
-#     parser = argparse.ArgumentParser()
-#     parser.add_argument(
-#         "--dataset_name",
-#         type=str,
-#         required=True,
-#         help="Name of the dataset to process",
-#     )
-#     parser.add_argument("--compression", type=str, default="zstd")
-#     parser.add_argument("--local_dir", type=str, required=True)
-#     parser.add_argument(
-#         "--hashes",
-#         type=str,
-#         nargs="+",
-#         default=["sha1", "xxh64"],
-#     )
-#     parser.add_argument("--splits", type=str, nargs="+", default=["train"])
-#     parser.add_argument(
-#         "--tokenizer_name",
-#         type=str,
-#         default="rajammanabrolu/gpt-4-chat",
-#     )
-#     parser.add_argument(
-#         "--dataset_type",
-#         type=str,
-#         choices=["preference", "single_prompt", "classifier"],
-#         required=True,
-#         help="Type of dataset to process",
-#     )
-#     parser.add_argument(
-#         "--max_length",
-#         type=int,
-#         default=2048,
-#         help="Maximum length of tokenized samples",
-#     )
-#     # Add this argument
-#     parser.add_argument(
-#         "--max_samples",
-#         type=int,
-#         default=1000,
-#         help="Maximum number of samples to process",
-#     )
-
-#     args = parser.parse_args()
-
-
-#     main(
-#         dataset_name=args.dataset_name,
-#         compression=args.compression,
-#         local_dir=args.local_dir,
-#         hashes=args.hashes,
-#         splits=args.splits,
-#         tokenizer_name=args.tokenizer_name,
-#         dataset_type=args.dataset_type,
-#         max_length=args.max_length,
-#         max_samples=args.max_samples,  # Pass the parameter to main
-#     )
 def main(
     dataset_name: str,
     compression: str,

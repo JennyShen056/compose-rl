@@ -37,7 +37,6 @@ class PairwiseRewardEnum(Enum):
 
 class ClassifierRewardEnum(Enum):
     BCE = "bce"
-    CE = "ce"  # Add Cross Entropy for multi-class classification
 
 
 def pairwise_forward(
@@ -300,30 +299,11 @@ def classifier_loss(
         except Exception as e:
             print(f"DEBUG LOSS: Failed to calculate loss: {e}")
             raise
-    elif loss_type == ClassifierRewardEnum.CE:
-        # For multi-class classification with Cross Entropy
-        # Need to reshape because CrossEntropyLoss expects class indices without a second dimension
-        labels = labels.view(-1)  # Reshape to [batch_size]
-        loss = F.cross_entropy(output_scores, labels)
     else:
         raise NotImplementedError(f"Loss type: {loss_type} is not supported.")
 
-    # Add accuracy metric
-    with torch.no_grad():
-        if loss_type == ClassifierRewardEnum.CE:
-            predictions = torch.argmax(output_scores, dim=1)
-            accuracy = (predictions == labels).float().mean()
-        else:
-            # For binary classification
-            predictions = (output_scores > 0).float()
-            accuracy = (predictions == labels).float().mean()
-
     loss_dict = {
         "total": loss,
-        "accuracy": accuracy,
     }
-    # loss_dict = {
-    #     "total": loss,
-    # }
 
     return loss_dict
