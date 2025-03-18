@@ -194,7 +194,7 @@ def main(
         },
         "classifier": {
             "input": "bytes",
-            "labelz": "bytes",  # Note: fixed from "labels" to "label" to match the actual code
+            "labels": "bytes",  # Note: fixed from "labels" to "label" to match the actual code
         },
     }[dataset_type]
 
